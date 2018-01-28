@@ -199,7 +199,7 @@ class OicSession < ActiveRecord::Base
    query = {
      'id_token_hint' => id_token,
      'session_state' => session_state,
-     'post_logout_redirect_uri' => "#{host_name}/oic/local_logout",
+     'post_logout_redirect_uri' => "#{host_name}/oic/login",
    }
   end
 
