@@ -11,10 +11,34 @@ module RedmineOpenidConnect
   end # ApplicationControllerPatch
 
   module InstanceMethods
+    def token_valid?
+      if session[:oic_session_id].blank?
+        oic_session = OicSession.create
+        session[:oic_session_id] = oic_session.id
+        return false
+      else
+        begin
+          oic_session = OicSession.find session[:oic_session_id]
+        rescue ActiveRecord::RecordNotFound => e
+          oic_session = OicSession.create
+          session[:oic_session_id] = oic_session.id
+          return false
+        end
+        return false if oic_session.expired?
+        response = oic_session.refresh_access_token!
+        if response["error"].present?
+          oic_session.destroy
+          return false
+        end
+      end
+
+      true
+    end
+
     def require_login_with_openid_connect
       return require_login_without_openid_connect unless OicSession.enabled?
 
-      if !User.current.logged?
+      if !token_valid? #!User.current.logged?
         redirect_to oic_login_url
         return false
       end
