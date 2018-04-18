@@ -17,7 +17,7 @@ module RedmineOpenidConnect
       if OicSession.disabled? || params[:local_login].present? || request.post?
         return login_without_openid_connect
       end
-      
+
       redirect_to oic_login_url
     end
 
@@ -30,7 +30,11 @@ module RedmineOpenidConnect
       oic_session.destroy
       logout_user
       reset_session
-      redirect_to oic_session.end_session_url
+      if request.headers.key?("X-IDS-External")
+        redirect_to oic_session.end_session_url 'external'
+      else
+        redirect_to oic_session.end_session_url
+      end
     rescue ActiveRecord::RecordNotFound => e
       redirect_to oic_local_logout_url
     end
@@ -57,8 +61,11 @@ module RedmineOpenidConnect
           end
         end
       end
-      
-      redirect_to oic_session.authorization_url
+      if request.headers.key?("X-IDS-External")
+        redirect_to oic_session.authorization_url "external"
+      else
+        redirect_to oic_session.authorization_url
+      end
     end
 
     def oic_local_logout
@@ -89,11 +96,14 @@ module RedmineOpenidConnect
             return redirect_to oic_local_logout
           end
         end
-        
-        # get access token and user info
-        oic_session.get_access_token!
-        user_info = oic_session.get_user_info!
 
+        # get access token and user info
+        if request.headers.key?("X-IDS-External")
+          oic_session.get_access_token! "external"
+        else
+          oic_session.get_access_token!
+        end
+        user_info = oic_session.get_user_info!
         # verify application authorization
         unless oic_session.authorized?
           return invalid_credentials
@@ -108,11 +118,11 @@ module RedmineOpenidConnect
           user.login = user_info["preferred_username"]
 
           attributes = {
-            firstname: user_info["given_name"],
-            lastname: user_info["family_name"],
-            mail: user_info["email"],
-            mail_notification: 'only_my_events',
-            last_login_on: Time.now
+              firstname: user_info["given_name"],
+              lastname: user_info["family_name"],
+              mail: user_info["email"],
+              mail_notification: 'only_my_events',
+              last_login_on: Time.now
           }
 
           user.assign_attributes attributes
@@ -159,16 +169,16 @@ module RedmineOpenidConnect
       # compatible with both rails 3 and 4
       if params.respond_to?(:permit)
         params.permit(
-          :code,
-          :id_token,
-          :session_state,
+            :code,
+            :id_token,
+            :session_state,
         )
       else
-        params.select do |k,v|
+        params.select do |k, v|
           [
-            'code',
-            'id_token',
-            'session_state',
+              'code',
+              'id_token',
+              'session_state',
           ].include?(k)
         end
       end

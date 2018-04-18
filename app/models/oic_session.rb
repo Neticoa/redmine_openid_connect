@@ -12,11 +12,15 @@ class OicSession < ActiveRecord::Base
     self.class.client_config
   end
 
-  def self.host_name
-    Setting.protocol + "://" + Setting.host_name
+  def self.host_name *host_key
+    return Setting.protocol + "://" + Setting.host_name unless host_key.any?
+    parsed_host_name = Hash[*Setting.host_name.split(/=|,/)][host_key[0]]
+    Setting.protocol + "://" + parsed_host_name
   end
 
-  def host_name
+
+  def host_name *host_key
+    return self.class.host_name host_key[0] if host_key.any?
     self.class.host_name
   end
 
@@ -54,14 +58,19 @@ class OicSession < ActiveRecord::Base
 
     HTTParty::Basement.default_options.update(verify: false) if client_config['disable_ssl_validation']
     response = HTTParty.post(
-      uri,
-      body: query,
-      basic_auth: {username: client_config['client_id'], password: client_config['client_secret'] }
+        uri,
+        body: query,
+        basic_auth: {username: client_config['client_id'], password: client_config['client_secret']}
     )
   end
 
-  def get_access_token!
-    response = self.class.get_token(access_token_query)
+  def get_access_token! *host_key
+    if host_key.any?
+      response = self.class.get_token(access_token_query host_key[0])
+    else
+      response = self.class.get_token(access_token_query)
+    end
+
     if response["error"].blank?
       self.access_token = response["access_token"] if response["access_token"].present?
       self.refresh_token = response["refresh_token"] if response["refresh_token"].present?
@@ -101,8 +110,8 @@ class OicSession < ActiveRecord::Base
 
     HTTParty::Basement.default_options.update(verify: false) if client_config['disable_ssl_validation']
     response = HTTParty.get(
-      uri,
-      headers: { "Authorization" => "Bearer #{access_token}" }
+        uri,
+        headers: {"Authorization" => "Bearer #{access_token}"}
     )
 
     if response.headers["content-type"] == 'application/jwt'
@@ -125,7 +134,7 @@ class OicSession < ActiveRecord::Base
     return true if self.admin?
 
     if client_config['group'].present? &&
-       user["member_of"].include?(client_config['group'])
+        user["member_of"].include?(client_config['group'])
       return true
     end
 
@@ -134,7 +143,7 @@ class OicSession < ActiveRecord::Base
 
   def admin?
     if client_config['admin_group'].present? &&
-       user["member_of"].include?(client_config['admin_group'])
+        user["member_of"].include?(client_config['admin_group'])
       return true
     end
 
@@ -148,14 +157,19 @@ class OicSession < ActiveRecord::Base
     return @user
   end
 
-  def authorization_url
+  def authorization_url *host_key
     config = dynamic_config
+    return config["authorization_endpoint"] + "?" + authorization_query(host_key[0]).to_param if host_key.any?
     config["authorization_endpoint"] + "?" + authorization_query.to_param
   end
 
-  def end_session_url
+  def end_session_url *host_key
     config = dynamic_config
-    config["end_session_endpoint"] + "?" + end_session_query.to_param
+    if host_key.any?
+      config["end_session_endpoint"] + "?" + end_session_query(host_key[0]).to_param
+    else
+      config["end_session_endpoint"] + "?" + end_session_query.to_param
+    end
   end
 
   def randomize_state!
@@ -166,41 +180,68 @@ class OicSession < ActiveRecord::Base
     self.nonce = SecureRandom.uuid unless self.nonce.present?
   end
 
-  def authorization_query
-    query = {
-      "response_type" => "code",
-      "state" => self.state,
-      "nonce" => self.nonce,
-      "scope" => "openid profile email preferred_username",
-      "redirect_uri" => "#{host_name}/oic/local_login",
-      "client_id" => client_config['client_id'],
-    }
+  def authorization_query *host_key
+    if host_key.any?
+      query = {
+          "response_type" => "code",
+          "state" => self.state,
+          "nonce" => self.nonce,
+          "scope" => "openid profile email preferred_username",
+          "redirect_uri" => "#{host_name host_key[0] }/oic/local_login",
+          "client_id" => client_config['client_id'],
+      }
+    else
+      query = {
+          "response_type" => "code",
+          "state" => self.state,
+          "nonce" => self.nonce,
+          "scope" => "openid profile email preferred_username",
+          "redirect_uri" => "#{host_name}/oic/local_login",
+          "client_id" => client_config['client_id'],
+      }
+    end
+
   end
 
-  def access_token_query
+  def access_token_query *host_key
     query = {
-      'grant_type' => 'authorization_code',
-      'code' => code,
-      'scope' => 'openid profile email preferred_username',
-      'id_token' => id_token,
-      'redirect_uri' => "#{host_name}/oic/local_login",
+        'grant_type' => 'authorization_code',
+        'code' => code,
+        'scope' => 'openid profile email preferred_username',
+        'id_token' => id_token,
+        'redirect_uri' => "#{host_name}/oic/local_login",
     }
+    if host_key.any?
+      query['redirect_uri'] = "#{host_name host_key[0]}/oic/local_login"
+      return query
+    else
+      return query
+    end
   end
 
   def refresh_token_query
     query = {
-      'grant_type' => 'refresh_token',
-      'refresh_token' => refresh_token,
-      'scope' => 'openid profile email preferred_username',
+        'grant_type' => 'refresh_token',
+        'refresh_token' => refresh_token,
+        'scope' => 'openid profile email preferred_username',
     }
   end
 
-  def end_session_query
-   query = {
-     'id_token_hint' => id_token,
-     'session_state' => session_state,
-     'post_logout_redirect_uri' => "#{host_name}/oic/login",
-   }
+  def end_session_query *host_key
+    if host_key.any?
+      query = {
+          'id_token_hint' => id_token,
+          'session_state' => session_state,
+          'post_logout_redirect_uri' => "#{host_name host_key[0]}/oic/login",
+      }
+    else
+      query = {
+          'id_token_hint' => id_token,
+          'session_state' => session_state,
+          'post_logout_redirect_uri' => "#{host_name}/oic/login",
+      }
+    end
+
   end
 
   def expired?
