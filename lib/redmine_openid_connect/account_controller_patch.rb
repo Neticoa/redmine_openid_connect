@@ -17,7 +17,7 @@ module RedmineOpenidConnect
       if OicSession.disabled? || params[:local_login].present? || request.post?
         return login_without_openid_connect
       end
-      
+
       redirect_to oic_login_url
     end
 
@@ -57,7 +57,8 @@ module RedmineOpenidConnect
           end
         end
       end
-      
+      oic_session.ids_redirect_uri = request.headers['X-IDS-External']
+      oic_session.save!
       redirect_to oic_session.authorization_url
     end
 
@@ -89,7 +90,7 @@ module RedmineOpenidConnect
             return redirect_to oic_local_logout
           end
         end
-        
+
         # get access token and user info
         oic_session.get_access_token!
         user_info = oic_session.get_user_info!
@@ -108,11 +109,11 @@ module RedmineOpenidConnect
           user.login = user_info["preferred_username"]
 
           attributes = {
-            firstname: user_info["given_name"],
-            lastname: user_info["family_name"],
-            mail: user_info["email"],
-            mail_notification: 'only_my_events',
-            last_login_on: Time.now
+              firstname: user_info["given_name"],
+              lastname: user_info["family_name"],
+              mail: user_info["email"],
+              mail_notification: 'only_my_events',
+              last_login_on: Time.now
           }
 
           user.assign_attributes attributes
@@ -159,16 +160,16 @@ module RedmineOpenidConnect
       # compatible with both rails 3 and 4
       if params.respond_to?(:permit)
         params.permit(
-          :code,
-          :id_token,
-          :session_state,
+            :code,
+            :id_token,
+            :session_state,
         )
       else
-        params.select do |k,v|
+        params.select do |k, v|
           [
-            'code',
-            'id_token',
-            'session_state',
+              'code',
+              'id_token',
+              'session_state',
           ].include?(k)
         end
       end

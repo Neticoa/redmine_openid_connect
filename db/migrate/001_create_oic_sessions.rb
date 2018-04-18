@@ -9,8 +9,10 @@ class CreateOicSessions < ActiveRecord::Migration
       t.text :id_token
       t.text :access_token
       t.text :refresh_token
+      t.text :ids_redirect_uri
       t.datetime :expires_at
       t.timestamps
+
     end
 
     add_index :oic_sessions, :user_id, length: 64

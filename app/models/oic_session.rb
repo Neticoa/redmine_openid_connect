@@ -54,14 +54,16 @@ class OicSession < ActiveRecord::Base
 
     HTTParty::Basement.default_options.update(verify: false) if client_config['disable_ssl_validation']
     response = HTTParty.post(
-      uri,
-      body: query,
-      basic_auth: {username: client_config['client_id'], password: client_config['client_secret'] }
+        uri,
+        body: query,
+        basic_auth: {username: client_config['client_id'], password: client_config['client_secret']}
     )
   end
 
   def get_access_token!
-    response = self.class.get_token(access_token_query)
+    hash = access_token_query
+    hash['redirect_uri'] = self.ids_redirect_uri if self.ids_redirect_uri
+    response = self.class.get_token(hash)
     if response["error"].blank?
       self.access_token = response["access_token"] if response["access_token"].present?
       self.refresh_token = response["refresh_token"] if response["refresh_token"].present?
@@ -101,8 +103,8 @@ class OicSession < ActiveRecord::Base
 
     HTTParty::Basement.default_options.update(verify: false) if client_config['disable_ssl_validation']
     response = HTTParty.get(
-      uri,
-      headers: { "Authorization" => "Bearer #{access_token}" }
+        uri,
+        headers: {"Authorization" => "Bearer #{access_token}"}
     )
 
     if response.headers["content-type"] == 'application/jwt'
@@ -125,7 +127,7 @@ class OicSession < ActiveRecord::Base
     return true if self.admin?
 
     if client_config['group'].present? &&
-       user["member_of"].include?(client_config['group'])
+        user["member_of"].include?(client_config['group'])
       return true
     end
 
@@ -134,7 +136,7 @@ class OicSession < ActiveRecord::Base
 
   def admin?
     if client_config['admin_group'].present? &&
-       user["member_of"].include?(client_config['admin_group'])
+        user["member_of"].include?(client_config['admin_group'])
       return true
     end
 
@@ -150,12 +152,17 @@ class OicSession < ActiveRecord::Base
 
   def authorization_url
     config = dynamic_config
-    config["authorization_endpoint"] + "?" + authorization_query.to_param
+    hash = authorization_query
+    hash["redirect_uri"] = self.ids_redirect_uri if self.ids_redirect_uri
+    url = config["authorization_endpoint"] + "?" + hash.to_param
+    url
   end
 
   def end_session_url
     config = dynamic_config
-    config["end_session_endpoint"] + "?" + end_session_query.to_param
+    hash = end_session_query
+    hash['post_logout_redirect_uri'] = self.ids_redirect_uri if self.ids_redirect_uri
+    config["end_session_endpoint"] + "?" + hash.to_param
   end
 
   def randomize_state!
@@ -168,39 +175,39 @@ class OicSession < ActiveRecord::Base
 
   def authorization_query
     query = {
-      "response_type" => "code",
-      "state" => self.state,
-      "nonce" => self.nonce,
-      "scope" => "openid profile email preferred_username",
-      "redirect_uri" => "#{host_name}/oic/local_login",
-      "client_id" => client_config['client_id'],
+        "response_type" => "code",
+        "state" => self.state,
+        "nonce" => self.nonce,
+        "scope" => "openid profile email preferred_username",
+        "redirect_uri" => "#{host_name}/oic/local_login",
+        "client_id" => client_config['client_id'],
     }
   end
 
   def access_token_query
     query = {
-      'grant_type' => 'authorization_code',
-      'code' => code,
-      'scope' => 'openid profile email preferred_username',
-      'id_token' => id_token,
-      'redirect_uri' => "#{host_name}/oic/local_login",
+        'grant_type' => 'authorization_code',
+        'code' => code,
+        'scope' => 'openid profile email preferred_username',
+        'id_token' => id_token,
+        'redirect_uri' => "#{host_name}/oic/local_login",
     }
   end
 
   def refresh_token_query
     query = {
-      'grant_type' => 'refresh_token',
-      'refresh_token' => refresh_token,
-      'scope' => 'openid profile email preferred_username',
+        'grant_type' => 'refresh_token',
+        'refresh_token' => refresh_token,
+        'scope' => 'openid profile email preferred_username',
     }
   end
 
   def end_session_query
-   query = {
-     'id_token_hint' => id_token,
-     'session_state' => session_state,
-     'post_logout_redirect_uri' => "#{host_name}/oic/login",
-   }
+    query = {
+        'id_token_hint' => id_token,
+        'session_state' => session_state,
+        'post_logout_redirect_uri' => "#{host_name}/oic/login",
+    }
   end
 
   def expired?
