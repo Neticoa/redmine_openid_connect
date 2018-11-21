@@ -13,7 +13,7 @@ class CreateOicSessions < ActiveRecord::Migration
       t.timestamps
     end
 
-    add_index :oic_sessions, :user_id, length: 64
+    add_index :oic_sessions, :user_id
     add_index :oic_sessions, :access_token, length: 64
     add_index :oic_sessions, :refresh_token, length: 64
     add_index :oic_sessions, :id_token, length: 64
