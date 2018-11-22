@@ -38,11 +38,10 @@ module RedmineOpenidConnect
     def require_login_with_openid_connect
       return require_login_without_openid_connect unless OicSession.enabled?
 
-      if !token_valid? #!User.current.logged?
+      if !User.current.logged? #!token_valid?
         redirect_to oic_login_url
         return false
       end
-      true
     end
 
     # set the current user _without_ resetting the session first
