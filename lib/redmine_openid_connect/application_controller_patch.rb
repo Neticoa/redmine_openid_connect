@@ -39,6 +39,12 @@ module RedmineOpenidConnect
       return require_login_without_openid_connect unless OicSession.enabled?
 
       if !User.current.logged? #!token_valid?
+        if request.get?
+          url = request.original_url
+        else
+          url = url_for(:controller => params[:controller], :action => params[:action], :id => params[:id], :project_id => params[:project_id])
+        end
+        session[:remember_url] = url
         redirect_to oic_login_url
         return false
       end

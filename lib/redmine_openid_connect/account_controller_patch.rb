@@ -8,11 +8,24 @@ module RedmineOpenidConnect
         alias_method_chain :login, :openid_connect
         alias_method_chain :logout, :openid_connect
         alias_method_chain :invalid_credentials, :openid_connect
+        alias_method_chain :successful_authentication, :remember_url
       end
     end
   end # AccountControllerPatch
 
   module InstanceMethods
+    def successful_authentication_with_remember_url user
+      if OicSession.disabled? || params[:local_login].present? || request.post?
+        return successful_authentication_without_remember_url user
+      end
+      # TODO
+      if session[:remember_url]
+        params[:back_url] = session[:remember_url]
+        session[:remember_url] = nil
+      end
+      return successful_authentication_without_remember_url user
+    end
+
     def login_with_openid_connect
       if OicSession.disabled? || params[:local_login].present? || request.post?
         return login_without_openid_connect
