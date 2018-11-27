@@ -144,7 +144,7 @@ module RedmineOpenidConnect
             return invalid_credentials
           end
         else
-          user.update_attribute(:admin, true) if oic_session.admin?
+          user.update_attribute(:admin, oic_session.admin?)
           oic_session.user_id = user.id
           oic_session.save!
           successful_authentication(user)
