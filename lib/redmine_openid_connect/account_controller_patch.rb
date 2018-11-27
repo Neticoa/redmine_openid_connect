@@ -112,6 +112,13 @@ module RedmineOpenidConnect
           return invalid_credentials
         end
 
+        attributes = {
+          firstname: user_info["given_name"],
+          lastname: user_info["family_name"],
+          mail: user_info["email"],
+          last_login_on: Time.now
+        }
+
         # Check if there's already an existing user
         user = User.find_by_mail(user_info["email"])
 
@@ -119,22 +126,23 @@ module RedmineOpenidConnect
           user = User.new
 
           user.login = user_info["preferred_username"]
-
-          attributes = {
-            firstname: user_info["given_name"],
-            lastname: user_info["family_name"],
-            mail: user_info["email"],
-            mail_notification: 'only_my_events',
-            last_login_on: Time.now
-          }
-
           user.assign_attributes attributes
 
           if user.save
             user.update_attribute(:admin, true) if oic_session.admin?
             oic_session.user_id = user.id
             oic_session.save!
-            successful_authentication(user)
+            if oic_session.authorized? 
+              user.lock!
+            else
+              user.activate!
+            end
+            # Existing record
+            if user.active?
+              successful_authentication(user)
+            else
+              handle_inactive_user(user)
+            end
           else
             flash.now[:warning] ||= "Unable to create user #{user.login}: "
             user.errors.full_messages.each do |error|
@@ -145,9 +153,20 @@ module RedmineOpenidConnect
           end
         else
           user.update_attribute(:admin, oic_session.admin?)
+          user.assign_attributes(attributes)
+          if oic_session.authorized? 
+            user.lock!
+          else
+            user.activate!
+          end
           oic_session.user_id = user.id
           oic_session.save!
-          successful_authentication(user)
+          # Existing record
+          if user.active?
+            successful_authentication(user)
+          else
+            handle_inactive_user(user)
+          end
         end # if user.nil?
       end
     end
