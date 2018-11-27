@@ -107,11 +107,6 @@ module RedmineOpenidConnect
         oic_session.get_access_token!
         user_info = oic_session.get_user_info!
 
-        # verify application authorization
-        unless oic_session.authorized?
-          return invalid_credentials
-        end
-
         attributes = {
           firstname: user_info["given_name"],
           lastname: user_info["family_name"],
@@ -123,6 +118,9 @@ module RedmineOpenidConnect
         user = User.find_by_mail(user_info["email"])
 
         if user.nil?
+          unless oic_session.authorized?
+            return invalid_credentials
+          end
           user = User.new
 
           user.login = user_info["preferred_username"]
@@ -133,9 +131,9 @@ module RedmineOpenidConnect
             oic_session.user_id = user.id
             oic_session.save!
             if oic_session.authorized? 
-              user.lock!
-            else
               user.activate!
+            else
+              user.lock!
             end
             # Existing record
             if user.active?
@@ -155,9 +153,9 @@ module RedmineOpenidConnect
           user.update_attribute(:admin, oic_session.admin?)
           user.assign_attributes(attributes)
           if oic_session.authorized? 
-            user.lock!
-          else
             user.activate!
+          else
+            user.lock!
           end
           oic_session.user_id = user.id
           oic_session.save!
@@ -175,7 +173,7 @@ module RedmineOpenidConnect
       return invalid_credentials_without_openid_connect unless OicSession.enabled?
 
       logger.warn "Failed login for '#{params[:username]}' from #{request.remote_ip} at #{Time.now.utc}"
-      flash.now[:error] = (l(:notice_account_invalid_creditentials) + ". " + "<a href='#{signout_path}'>Try a different account</a>").html_safe
+      flash.now[:error] = (l(:notice_account_invalid_credentials) + ". " + "<a href='#{signout_path}'>Try a different account</a>").html_safe
     end
 
     def rpiframe

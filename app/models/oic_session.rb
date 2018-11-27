@@ -133,6 +133,7 @@ class OicSession < ActiveRecord::Base
   end
 
   def admin?
+    return false if !user["member_of"]
     if client_config['admin_group'].present? &&
        user["member_of"].include?(client_config['admin_group'])
       return true
