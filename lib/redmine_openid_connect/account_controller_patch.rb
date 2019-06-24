@@ -1,42 +1,29 @@
 module RedmineOpenidConnect
   module AccountControllerPatch
-    def self.included(base)
-      base.send(:include, InstanceMethods)
 
-      base.class_eval do
-        # Add before filters and stuff here
-        alias_method_chain :login, :openid_connect
-        alias_method_chain :logout, :openid_connect
-        alias_method_chain :invalid_credentials, :openid_connect
-        alias_method_chain :successful_authentication, :remember_url
-      end
-    end
-  end # AccountControllerPatch
-
-  module InstanceMethods
-    def successful_authentication_with_remember_url user
+    def successful_authentication user
       if OicSession.disabled? || params[:local_login].present? || request.post?
-        return successful_authentication_without_remember_url user
+        return super user
       end
       # TODO
       if session[:remember_url]
         params[:back_url] = session[:remember_url]
         session[:remember_url] = nil
       end
-      return successful_authentication_without_remember_url user
+      return super
     end
 
-    def login_with_openid_connect
+    def login
       if OicSession.disabled? || params[:local_login].present? || request.post?
-        return login_without_openid_connect
+        return super
       end
       
       redirect_to oic_login_url
     end
 
-    def logout_with_openid_connect
+    def logout
       if OicSession.disabled? || params[:local_login].present?
-        return logout_without_openid_connect
+        return super
       end
 
       oic_session = OicSession.find(session[:oic_session_id])
@@ -169,8 +156,8 @@ module RedmineOpenidConnect
       end
     end
 
-    def invalid_credentials_with_openid_connect
-      return invalid_credentials_without_openid_connect unless OicSession.enabled?
+    def invalid_credentials
+      return super unless OicSession.enabled?
 
       logger.warn "Failed login for '#{params[:username]}' from #{request.remote_ip} at #{Time.now.utc}"
       flash.now[:error] = (l(:notice_account_invalid_credentials) + ". " + "<a href='#{signout_path}'>Try a different account</a>").html_safe
@@ -178,10 +165,6 @@ module RedmineOpenidConnect
 
     def rpiframe
       @oic_session = OicSession.find(session[:oic_session_id])
-      render layout: false
-    end
-
-    def sha256
       render layout: false
     end
 

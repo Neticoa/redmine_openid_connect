@@ -1,16 +1,6 @@
 module RedmineOpenidConnect
   module ApplicationControllerPatch
-    def self.included(base)
-      base.send(:include, InstanceMethods)
 
-      base.class_eval do
-        alias_method_chain :require_login, :openid_connect
-        alias_method_chain :logged_user=, :openid_connect
-      end
-    end
-  end # ApplicationControllerPatch
-
-  module InstanceMethods
     def token_valid?
       if session[:oic_session_id].blank?
         oic_session = OicSession.create
@@ -35,8 +25,8 @@ module RedmineOpenidConnect
       true
     end
 
-    def require_login_with_openid_connect
-      return require_login_without_openid_connect unless OicSession.enabled?
+    def require_login
+      return super unless OicSession.enabled?
 
       if !User.current.logged? #!token_valid?
         if request.get?
@@ -52,7 +42,7 @@ module RedmineOpenidConnect
     end
 
     # set the current user _without_ resetting the session first
-    def logged_user_with_openid_connect=(user)
+    def logged_user=(user)
       return send(:logged_user_without_openid_connect=, user) unless OicSession.enabled?
 
       if user && user.is_a?(User)
