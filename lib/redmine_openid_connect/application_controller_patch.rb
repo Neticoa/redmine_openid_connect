@@ -35,7 +35,22 @@ module RedmineOpenidConnect
           url = url_for(:controller => params[:controller], :action => params[:action], :id => params[:id], :project_id => params[:project_id])
         end
         session[:remember_url] = url
-        redirect_to oic_login_url
+        respond_to do |format|
+          format.html {
+            if request.xhr?
+              head :unauthorized
+            else
+              redirect_to oic_login_url
+            end
+          }
+          format.any(:atom, :pdf, :csv) {
+            redirect_to oic_login_url
+          }
+          format.xml  { head :unauthorized, 'WWW-Authenticate' => 'Basic realm="Redmine API"' }
+          format.js   { head :unauthorized, 'WWW-Authenticate' => 'Basic realm="Redmine API"' }
+          format.json { head :unauthorized, 'WWW-Authenticate' => 'Basic realm="Redmine API"' }
+          format.any  { head :unauthorized }
+        end
         return false
       end
       true
@@ -43,7 +58,7 @@ module RedmineOpenidConnect
 
     # set the current user _without_ resetting the session first
     def logged_user=(user)
-      return send(:logged_user_without_openid_connect=, user) unless OicSession.enabled?
+      return super(user) unless OicSession.enabled?
 
       if user && user.is_a?(User)
         User.current = user
